@@ -1,11 +1,15 @@
-import { Controller, Post, Body, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Body, UseGuards, Request } from '@nestjs/common';
 import { UsersService } from './users.service';
 import * as bcrypt from 'bcrypt';
-import * as jwt from 'jsonwebtoken';
+import { JwtAuthGuard } from '../auth/jwt/jwt.guard';
+import { AuthService } from '../auth/auth.service';
 
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly authService: AuthService,
+  ) {}
 
   @Post('register')
   async register(
@@ -14,7 +18,7 @@ export class UsersController {
   ): Promise<{ message: string }> {
     const existingUser = await this.usersService.findByEmail(email);
     if (existingUser) {
-      throw new BadRequestException('Email already exists');
+      throw new Error('Email already exists');
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -29,12 +33,18 @@ export class UsersController {
   ): Promise<{ token: string }> {
     const user = await this.usersService.validateUser(email, password);
 
-    const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
-      process.env.JWT_SECRET, // Access the secret from the environment
-      { expiresIn: '1h' },
-    );
+    const token = await this.authService.generateToken({
+      id: user.id,
+      email: user.email,
+      role: user.role,
+    });
 
     return { token };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('profile')
+  async getProfile(@Request() req): Promise<any> {
+    return req.user; // Return the user object attached by the guard
   }
 }
