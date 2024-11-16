@@ -4,7 +4,15 @@ import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { ValidationPipe } from '@nestjs/common';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    logger: ['error', 'warn', 'debug'],
+  });
+  
+  // Enable CORS for frontend
+  app.enableCors({
+    origin: 'http://localhost:3000', // Frontend URL
+    credentials: true,
+  });
   
   // Global exception filter
   app.useGlobalFilters(new AllExceptionsFilter());
@@ -18,6 +26,14 @@ async function bootstrap() {
     errorHttpStatusCode: 422,
   }));
 
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(3001);
+  
+  // Add startup message
+  console.log('\x1b[32m%s\x1b[0m', `
+🚀 Logimate Backend Server is running!
+📡 Server: http://localhost:3001
+⭐ Environment: ${process.env.NODE_ENV || 'development'}
+⏰ Started at: ${new Date().toLocaleString()}
+  `);
 }
 bootstrap();
