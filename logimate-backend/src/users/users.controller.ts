@@ -3,6 +3,8 @@ import { UsersService } from './users.service';
 import * as bcrypt from 'bcrypt';
 import { JwtAuthGuard } from '../auth/jwt/jwt.guard';
 import { AuthService } from '../auth/auth.service';
+import { RolesGuard } from '../auth/roles.guard';
+
 
 @Controller('users')
 export class UsersController {
@@ -46,5 +48,11 @@ export class UsersController {
   @Get('profile')
   async getProfile(@Request() req): Promise<any> {
     return req.user; // Return the user object attached by the guard
+  }
+
+  @UseGuards(JwtAuthGuard, new RolesGuard(['admin']))
+  @Get('admin-only')
+  getAdminData() {
+    return { message: 'This route is restricted to admins.' };
   }
 }
