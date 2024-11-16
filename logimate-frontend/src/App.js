@@ -1,11 +1,30 @@
 import './App.css';
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import LoginPage from './pages/LoginPage';
 import ProfilePage from './pages/ProfilePage';
 import InventoryPage from './pages/InventoryPage';
 import NotificationsPage from './pages/NotificationsPage';
+import Navbar from './components/Navbar';
+
+// Simple auth check
+const isAuthenticated = () => {
+  return !!localStorage.getItem('token');
+};
+
+// Protected Route component
+const ProtectedRoute = ({ children }) => {
+  if (!isAuthenticated()) {
+    return <Navigate to="/" replace />;
+  }
+  return (
+    <>
+      <Navbar />
+      {children}
+    </>
+  );
+};
 
 function App() {
   const { t, i18n } = useTranslation();
@@ -16,15 +35,51 @@ function App() {
 
   return (
     <Router>
-      <div className="p-4">
-        <h1 className="text-blue-500">{t('welcome')}</h1>
-        <button onClick={() => switchLanguage('en')}>English</button>
-        <button onClick={() => switchLanguage('ar')}>العربية</button>
+      <div className="min-h-screen bg-gray-50">
+        <div className="absolute top-4 right-4 space-x-2">
+          <button 
+            onClick={() => switchLanguage('en')}
+            className="px-3 py-1 text-sm bg-white rounded shadow hover:bg-gray-50"
+          >
+            English
+          </button>
+          <button 
+            onClick={() => switchLanguage('ar')}
+            className="px-3 py-1 text-sm bg-white rounded shadow hover:bg-gray-50"
+          >
+            العربية
+          </button>
+        </div>
+
         <Routes>
+          {/* Public route */}
           <Route path="/" element={<LoginPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
-          <Route path="/inventory" element={<InventoryPage />} />
-          <Route path="/notifications" element={<NotificationsPage />} />
+          
+          {/* Protected routes */}
+          <Route 
+            path="/profile" 
+            element={
+              <ProtectedRoute>
+                <ProfilePage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/inventory" 
+            element={
+              <ProtectedRoute>
+                <InventoryPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/notifications" 
+            element={
+              <ProtectedRoute>
+                <NotificationsPage />
+              </ProtectedRoute>
+            } 
+          />
         </Routes>
       </div>
     </Router>

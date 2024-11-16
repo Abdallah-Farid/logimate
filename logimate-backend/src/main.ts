@@ -8,11 +8,16 @@ async function bootstrap() {
     logger: ['error', 'warn', 'debug'],
   });
   
-  // Enable CORS for frontend
+  // Enable CORS for all origins during development
   app.enableCors({
-    origin: 'http://localhost:3000', // Frontend URL
+    origin: true,
     credentials: true,
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    allowedHeaders: ['Content-Type', 'Accept', 'Authorization'],
   });
+  
+  // Set global prefix
+  app.setGlobalPrefix('api');
   
   // Global exception filter
   app.useGlobalFilters(new AllExceptionsFilter());

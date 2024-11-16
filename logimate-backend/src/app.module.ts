@@ -8,6 +8,7 @@ import { InventoryModule } from './inventory/inventory.module';
 import { Inventory } from './inventory/inventory.entity';
 import { NotificationsModule } from './notifications/notifications.module';
 import { Notification } from './notifications/notifications.entity';
+import { DemandForecastModule } from './demand-forecast/demand-forecast.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { Notification } from './notifications/notifications.entity';
     AuthModule,
     InventoryModule,
     NotificationsModule,
+    DemandForecastModule,
   ],
 })
 export class AppModule {}

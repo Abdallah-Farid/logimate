@@ -1,0 +1,101 @@
+{
+	"info": {
+		"_postman_id": "your-id-here",
+		"name": "Logimate API",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Demand Forecast - Valid Input",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"productId\": \"12345\",\n    \"historicalData\": [120, 135, 150, 140, 145, 160, 155]\n}"
+				},
+				"url": {
+					"raw": "http://localhost:3001/api/demand-forecast",
+					"protocol": "http",
+					"host": ["localhost"],
+					"port": "3001",
+					"path": ["api", "demand-forecast"]
+				}
+			}
+		},
+		{
+			"name": "Demand Forecast - Missing ProductId",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"historicalData\": [120, 135, 150]\n}"
+				},
+				"url": {
+					"raw": "http://localhost:3001/api/demand-forecast",
+					"protocol": "http",
+					"host": ["localhost"],
+					"port": "3001",
+					"path": ["api", "demand-forecast"]
+				}
+			}
+		},
+		{
+			"name": "Demand Forecast - Missing HistoricalData",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"productId\": \"12345\"\n}"
+				},
+				"url": {
+					"raw": "http://localhost:3001/api/demand-forecast",
+					"protocol": "http",
+					"host": ["localhost"],
+					"port": "3001",
+					"path": ["api", "demand-forecast"]
+				}
+			}
+		},
+		{
+			"name": "Demand Forecast - Empty HistoricalData",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"productId\": \"12345\",\n    \"historicalData\": []\n}"
+				},
+				"url": {
+					"raw": "http://localhost:3001/api/demand-forecast",
+					"protocol": "http",
+					"host": ["localhost"],
+					"port": "3001",
+					"path": ["api", "demand-forecast"]
+				}
+			}
+		}
+	]
+}
