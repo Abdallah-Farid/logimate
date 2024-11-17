@@ -16,9 +16,15 @@ export class User {
   @Column()
   password: string;
 
-  @Column({ default: 'worker' }) // Default role is 'user'
+  @Column({ default: 'user' }) // Default role is 'user'
   role: string;
 
   @CreateDateColumn()
   created_at: Date;
+
+  // Method to return user data without sensitive fields
+  toJSON() {
+    const { password, ...rest } = this;
+    return rest;
+  }
 }

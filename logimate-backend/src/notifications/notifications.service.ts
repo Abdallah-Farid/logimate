@@ -1,4 +1,4 @@
-import { Injectable, Logger, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, InternalServerErrorException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Notification } from './notifications.entity';
@@ -27,12 +27,27 @@ export class NotificationsService {
     }
   }
 
+  async getUnreadCount(userId: string): Promise<number> {
+    try {
+      this.logger.debug(`Getting unread count for user: ${userId}`);
+      const count = await this.notificationsRepository.count({
+        where: { userId, read: false },
+      });
+      this.logger.debug(`Found ${count} unread notifications`);
+      return count;
+    } catch (error) {
+      this.logger.error('Error getting unread count:', error);
+      throw new InternalServerErrorException('Failed to get unread count');
+    }
+  }
+
   async createForUser(userId: string, message: string) {
     try {
       this.logger.debug(`Creating notification for user: ${userId}`);
       const notification = this.notificationsRepository.create({
         userId,
         message,
+        read: false,
       });
       const saved = await this.notificationsRepository.save(notification);
       this.logger.debug('Notification created:', saved);
@@ -43,28 +58,28 @@ export class NotificationsService {
     }
   }
 
-  async markAsRead(id: string) {
+  async markAsRead(id: string, userId: string) {
     try {
-      this.logger.debug(`Marking notification as read: ${id}`);
+      this.logger.debug(`Marking notification ${id} as read for user ${userId}`);
       
-      // First check if the notification exists
       const notification = await this.notificationsRepository.findOne({
-        where: { id }
+        where: { id },
       });
-      
+
       if (!notification) {
         throw new NotFoundException(`Notification with ID ${id} not found`);
       }
 
-      // Update the notification
-      await this.notificationsRepository.update(id, { read: true });
-      
-      // Return the updated notification
-      return await this.notificationsRepository.findOne({
-        where: { id }
-      });
+      if (notification.userId !== userId) {
+        throw new ForbiddenException('You can only mark your own notifications as read');
+      }
+
+      notification.read = true;
+      const updated = await this.notificationsRepository.save(notification);
+      this.logger.debug('Notification marked as read:', updated);
+      return updated;
     } catch (error) {
-      if (error instanceof NotFoundException) {
+      if (error instanceof NotFoundException || error instanceof ForbiddenException) {
         throw error;
       }
       this.logger.error('Error marking notification as read:', error);

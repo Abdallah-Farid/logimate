@@ -10,11 +10,11 @@ export class InventoryService {
     private readonly inventoryRepository: Repository<Inventory>,
   ) {}
 
-  async findAll() {
+  async findAll(): Promise<Inventory[]> {
     return this.inventoryRepository.find();
   }
 
-  async findOne(id: string) {
+  async findOne(id: string): Promise<Inventory> {
     const item = await this.inventoryRepository.findOne({ where: { id } });
     if (!item) {
       throw new NotFoundException(`Inventory item with ID ${id} not found`);
@@ -22,20 +22,19 @@ export class InventoryService {
     return item;
   }
 
-  async create(item: Partial<Inventory>) {
+  async create(item: Partial<Inventory>): Promise<Inventory> {
     const newItem = this.inventoryRepository.create(item);
     return this.inventoryRepository.save(newItem);
   }
 
-  async update(id: string, item: Partial<Inventory>) {
+  async update(id: string, item: Partial<Inventory>): Promise<Inventory> {
     await this.findOne(id); // Check if item exists
     await this.inventoryRepository.update(id, item);
     return this.findOne(id); // Return the updated item
   }
 
-  async delete(id: string) {
-    const item = await this.findOne(id); // Check if item exists
+  async delete(id: string): Promise<void> {
+    await this.findOne(id); // Check if item exists
     await this.inventoryRepository.delete(id);
-    return { message: `Inventory item ${item.name} has been deleted` };
   }
 }

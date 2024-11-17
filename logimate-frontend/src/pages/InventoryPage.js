@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
-import config from '../config';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -11,9 +9,20 @@ import {
   Title,
   Tooltip,
   Legend,
-  Filler,
+  Filler
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
+import { handleApiError } from '../utils/apiErrorHandler';
+import { logError } from '../utils/logger';
+import Button from '../components/Button';
+import PageTitle from '../components/PageTitle';
+import LoadingSpinner from '../components/LoadingSpinner';
+import Modal from '../components/Modal';
+import CollapsibleSection from '../components/CollapsibleSection';
+import PageTransition from '../components/PageTransition';
+import { useTranslation } from 'react-i18next';
+import { toast } from 'react-toastify';
+import api from '../utils/api';
 
 // Register ChartJS components
 ChartJS.register(
@@ -27,97 +36,80 @@ ChartJS.register(
   Filler
 );
 
-function InventoryPage() {
-  const [inventory, setInventory] = useState([]);
-  const [newItem, setNewItem] = useState({ name: '', quantity: 0, unitPrice: 0 });
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
+const listItemVariants = {
+  hidden: { opacity: 0, x: -20 },
+  visible: { opacity: 1, x: 0 }
+};
 
-  // Forecasting states
+function InventoryPage() {
+  const { t } = useTranslation();
+  const [inventory, setInventory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [productId, setProductId] = useState('');
   const [historicalData, setHistoricalData] = useState('');
   const [forecast, setForecast] = useState(null);
   const [forecastError, setForecastError] = useState('');
-  const [selectedItem, setSelectedItem] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [newItem, setNewItem] = useState({
+    name: '',
+    quantity: '',
+    unitPrice: ''
+  });
+  const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
+    fetchUserRole();
     fetchInventory();
   }, []);
 
+  const fetchUserRole = async () => {
+    try {
+      const response = await api.get('/users/profile');
+      setIsAdmin(response.data.role === 'admin');
+    } catch (err) {
+      logError(err, 'Failed to fetch user role:');
+    }
+  };
+
   const fetchInventory = async () => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        navigate('/');
-        return;
-      }
-
-      const response = await axios.get(`${config.apiUrl}/inventory`, {
-        headers: { Authorization: `Bearer ${token}` },
-        withCredentials: true
-      });
-      // Convert unitPrice to number for each item
-      const formattedInventory = response.data.map(item => ({
-        ...item,
-        unitPrice: parseFloat(item.unitPrice) || 0
-      }));
-      setInventory(formattedInventory);
-      setError('');
+      const response = await api.get('/inventory');
+      setInventory(response.data);
     } catch (err) {
-      if (err.response?.status === 401) {
-        localStorage.removeItem('token');
-        navigate('/');
-      } else {
-        setError(err.response?.data?.message || 'Failed to fetch inventory');
-      }
+      logError(err, 'Failed to fetch inventory:');
+      setError(handleApiError(err));
+      toast.error('Failed to fetch inventory items');
     } finally {
       setLoading(false);
     }
   };
 
-  const addItem = async (e) => {
+  const handleAddItem = async (e) => {
     e.preventDefault();
-    try {
-      const token = localStorage.getItem('token');
-      await axios.post(`${config.apiUrl}/inventory`, newItem, {
-        headers: { Authorization: `Bearer ${token}` },
-        withCredentials: true
-      });
-      setSuccess('Item added successfully!');
-      setError('');
-      setNewItem({ name: '', quantity: 0, unitPrice: 0 });
-      fetchInventory();
-      
-      // Clear success message after 3 seconds
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to add item');
-      setSuccess('');
-    }
-  };
-
-  const deleteItem = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this item?')) {
-      return;
-    }
+    setError('');
+    setSuccessMessage('');
 
     try {
-      const token = localStorage.getItem('token');
-      await axios.delete(`${config.apiUrl}/inventory/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-        withCredentials: true
+      await api.post('/inventory', {
+        name: newItem.name,
+        quantity: parseInt(newItem.quantity),
+        unitPrice: parseFloat(newItem.unitPrice)
       });
-      setSuccess('Item deleted successfully!');
-      setError('');
-      fetchInventory();
       
+      setSuccessMessage(t('Item added successfully!'));
+      setNewItem({ name: '', quantity: '', unitPrice: '' });
+      setIsAddModalOpen(false);
+      fetchInventory();
+      toast.success('Item added successfully');
+
       // Clear success message after 3 seconds
-      setTimeout(() => setSuccess(''), 3000);
+      setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to delete item');
-      setSuccess('');
+      logError(err, 'Failed to add item:');
+      setError(handleApiError(err));
+      toast.error('Failed to add item');
     }
   };
 
@@ -125,254 +117,276 @@ function InventoryPage() {
     e.preventDefault();
     setForecastError('');
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.post(
-        `${config.apiUrl}/demand-forecast`,
-        {
-          productId,
-          historicalData: historicalData.split(',').map(Number),
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const response = await api.post('/demand-forecast', {
+        productId,
+        historicalData: historicalData.split(',').map(Number),
+      });
       setForecast(response.data);
     } catch (err) {
-      setForecastError(err.response?.data?.message || 'Failed to fetch forecast');
+      logError(err, 'Failed to generate forecast:');
+      setForecastError(handleApiError(err));
     }
   };
 
-  const selectItemForForecast = (item) => {
-    setSelectedItem(item);
-    setProductId(item.id);
-    // Set some mock historical data based on current quantity
-    const mockData = Array(7)
-      .fill(item.quantity)
-      .map(q => Math.round(q * (0.8 + Math.random() * 0.4)));
-    setHistoricalData(mockData.join(','));
+  const deleteItem = async (id) => {
+    if (!window.confirm(t('Are you sure you want to delete this item?'))) {
+      return;
+    }
+
+    try {
+      await api.delete(`/inventory/${id}`);
+      setInventory(inventory.filter(item => item.id !== id));
+      setSuccessMessage(t('Item deleted successfully!'));
+      toast.success('Item deleted successfully');
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (err) {
+      logError(err, 'Failed to delete item:');
+      setError(handleApiError(err));
+      toast.error('Failed to delete item');
+    }
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <div className="flex items-center space-x-2">
-          <div className="w-4 h-4 bg-blue-500 rounded-full animate-bounce"></div>
-          <div className="w-4 h-4 bg-blue-500 rounded-full animate-bounce delay-100"></div>
-          <div className="w-4 h-4 bg-blue-500 rounded-full animate-bounce delay-200"></div>
-        </div>
+      <div className="flex justify-center items-center h-screen">
+        <LoadingSpinner />
       </div>
     );
   }
 
   return (
-    <div className="py-6 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 text-center mb-8">Inventory Dashboard</h1>
-        
-        {error && (
-          <div className="p-4 mb-6 text-red-700 bg-red-100 rounded-lg" role="alert">
-            {error}
-          </div>
-        )}
-        
-        {success && (
-          <div className="p-4 mb-6 text-green-700 bg-green-100 rounded-lg" role="alert">
-            {success}
-          </div>
-        )}
+    <PageTransition>
+      <div className="p-4">
+        <PageTitle 
+          title={t('Inventory Dashboard')} 
+          subtitle={t('Manage your inventory and generate demand forecasts')} 
+        />
 
-        <div className="bg-white rounded-lg shadow p-6 mb-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">Add New Item</h2>
-          <form onSubmit={addItem} className="space-y-4">
+        <AnimatePresence>
+          {error && (
+            <motion.div 
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="mb-4 p-4 bg-red-100 text-red-700 rounded-lg mx-4"
+            >
+              {error}
+            </motion.div>
+          )}
+
+          {successMessage && (
+            <motion.div 
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="mb-4 p-4 bg-green-100 text-green-700 rounded-lg mx-4"
+            >
+              {successMessage}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <div className="grid grid-cols-1 gap-6 p-4">
+          <CollapsibleSection title={t('Current Inventory')}>
+            <div className="space-y-4">
+              {isAdmin && (
+                <Button
+                  onClick={() => setIsAddModalOpen(true)}
+                  className="mb-4"
+                >
+                  {t('Add New Item')}
+                </Button>
+              )}
+
+              <div className="bg-white rounded-lg shadow overflow-hidden">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {t('Name')}
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {t('Quantity')}
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {t('Unit Price')}
+                      </th>
+                      {isAdmin && (
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          {t('Actions')}
+                        </th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    <AnimatePresence>
+                      {inventory.map((item) => (
+                        <motion.tr
+                          key={item.id}
+                          variants={listItemVariants}
+                          initial="hidden"
+                          animate="visible"
+                          exit="hidden"
+                        >
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {item.name}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {item.quantity}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            ${item.unitPrice}
+                          </td>
+                          {isAdmin && (
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                              <Button
+                                onClick={() => deleteItem(item.id)}
+                                variant="danger"
+                                size="sm"
+                              >
+                                {t('Delete')}
+                              </Button>
+                            </td>
+                          )}
+                        </motion.tr>
+                      ))}
+                    </AnimatePresence>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </CollapsibleSection>
+
+          {isAdmin && (
+            <CollapsibleSection title={t('Demand Forecast')}>
+              <form onSubmit={handleForecast} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    {t('Product ID')}
+                  </label>
+                  <input
+                    type="text"
+                    value={productId}
+                    onChange={(e) => setProductId(e.target.value)}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    {t('Historical Data (comma-separated)')}
+                  </label>
+                  <input
+                    type="text"
+                    value={historicalData}
+                    onChange={(e) => setHistoricalData(e.target.value)}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
+                </div>
+                <Button type="submit">
+                  {t('Generate Forecast')}
+                </Button>
+              </form>
+
+              {forecastError && (
+                <div className="mt-4 p-4 bg-red-100 text-red-700 rounded-lg">
+                  {forecastError}
+                </div>
+              )}
+
+              {forecast && (
+                <div className="mt-4">
+                  <Line
+                    data={{
+                      labels: forecast.map((_, i) => `Period ${i + 1}`),
+                      datasets: [
+                        {
+                          label: t('Forecast'),
+                          data: forecast,
+                          fill: true,
+                          borderColor: 'rgb(59, 130, 246)',
+                          backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        },
+                      ],
+                    }}
+                    options={{
+                      responsive: true,
+                      plugins: {
+                        legend: {
+                          position: 'top',
+                        },
+                        title: {
+                          display: true,
+                          text: t('Demand Forecast'),
+                        },
+                      },
+                    }}
+                  />
+                </div>
+              )}
+            </CollapsibleSection>
+          )}
+        </div>
+
+        <Modal
+          isOpen={isAddModalOpen}
+          onClose={() => setIsAddModalOpen(false)}
+          title={t('Add New Item')}
+        >
+          <form onSubmit={handleAddItem} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Name
+              <label className="block text-sm font-medium text-gray-700">
+                {t('Name')}
               </label>
               <input
                 type="text"
                 value={newItem.name}
                 onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Enter item name"
               />
             </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Quantity
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  value={newItem.quantity}
-                  onChange={(e) => setNewItem({ ...newItem, quantity: parseInt(e.target.value) || 0 })}
-                  required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Enter quantity"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Unit Price ($)
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={newItem.unitPrice}
-                  onChange={(e) => setNewItem({ ...newItem, unitPrice: parseFloat(e.target.value) || 0 })}
-                  required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Enter unit price"
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              className="w-full px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
-            >
-              Add Item
-            </button>
-          </form>
-        </div>
-
-        <div className="bg-white rounded-lg shadow">
-          <div className="p-6 border-b border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-900">Inventory Items</h2>
-          </div>
-          
-          {inventory.length === 0 ? (
-            <div className="p-6 text-center text-gray-500">
-              No items in inventory. Add your first item above.
-            </div>
-          ) : (
-            <ul className="divide-y divide-gray-200">
-              {inventory.map((item) => (
-                <li key={item.id} className="p-6 hover:bg-gray-50 transition-colors">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="text-lg font-medium text-gray-900">
-                        {item.name}
-                      </h3>
-                      <div className="text-sm text-gray-500">
-                        <p className="mb-1"><span className="font-medium">ID:</span> {item.id}</p>
-                        <span className="mr-4">Quantity: {item.quantity}</span>
-                        <span>Unit Price: ${typeof item.unitPrice === 'number' ? item.unitPrice.toFixed(2) : '0.00'}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => deleteItem(item.id)}
-                        className="px-4 py-2 text-sm text-white bg-red-600 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors"
-                      >
-                        Delete
-                      </button>
-                      <button
-                        onClick={() => selectItemForForecast(item)}
-                        className="px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
-                      >
-                        Forecast
-                      </button>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {/* Demand Forecasting Section */}
-        <div className="mb-8 p-4 bg-white rounded-lg shadow">
-          <h2 className="text-xl font-semibold mb-4">Demand Forecasting</h2>
-          <form onSubmit={handleForecast} className="mb-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Product ID</label>
-                <input
-                  type="text"
-                  value={productId}
-                  onChange={(e) => setProductId(e.target.value)}
-                  required
-                  className="w-full px-4 py-2 border rounded-lg"
-                  readOnly={!!selectedItem}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Historical Data (comma-separated)</label>
-                <input
-                  type="text"
-                  value={historicalData}
-                  onChange={(e) => setHistoricalData(e.target.value)}
-                  required
-                  placeholder="e.g., 120,135,150"
-                  className="w-full px-4 py-2 border rounded-lg"
-                />
-              </div>
-            </div>
-            <button
-              type="submit"
-              className="mt-4 px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-            >
-              Generate Forecast
-            </button>
-          </form>
-
-          {forecastError && (
-            <div className="p-2 mb-4 text-red-500 bg-red-100 rounded">{forecastError}</div>
-          )}
-
-          {forecast && (
             <div>
-              <h3 className="text-lg font-semibold mb-4">Forecast Results</h3>
-              <div className="h-80">
-                <Line
-                  data={{
-                    labels: forecast.days,
-                    datasets: [
-                      {
-                        label: `Forecast for Product ${forecast.productId}`,
-                        data: forecast.forecast,
-                        borderColor: 'rgba(75, 192, 192, 1)',
-                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                        fill: true,
-                        tension: 0.4,
-                      },
-                    ],
-                  }}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      legend: { display: true, position: 'top' },
-                      tooltip: {
-                        callbacks: {
-                          label: (context) => `Forecast: ${context.parsed.y} units`,
-                        },
-                      },
-                    },
-                    scales: {
-                      y: {
-                        beginAtZero: true,
-                        title: {
-                          display: true,
-                          text: 'Quantity',
-                        },
-                      },
-                    },
-                  }}
-                />
-              </div>
+              <label className="block text-sm font-medium text-gray-700">
+                {t('Quantity')}
+              </label>
+              <input
+                type="number"
+                value={newItem.quantity}
+                onChange={(e) => setNewItem({ ...newItem, quantity: e.target.value })}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                required
+              />
             </div>
-          )}
-        </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                {t('Unit Price')}
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={newItem.unitPrice}
+                onChange={(e) => setNewItem({ ...newItem, unitPrice: e.target.value })}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                required
+              />
+            </div>
+            <div className="flex justify-end space-x-3">
+              <Button
+                onClick={() => setIsAddModalOpen(false)}
+                variant="secondary"
+              >
+                {t('Cancel')}
+              </Button>
+              <Button type="submit">
+                {t('Add Item')}
+              </Button>
+            </div>
+          </form>
+        </Modal>
       </div>
-    </div>
+    </PageTransition>
   );
 }
 

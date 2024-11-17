@@ -1,14 +1,14 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { User } from './users/users.entity';
-import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { InventoryModule } from './inventory/inventory.module';
+import { UsersModule } from './users/users.module';
 import { Inventory } from './inventory/inventory.entity';
-import { NotificationsModule } from './notifications/notifications.module';
-import { Notification } from './notifications/notifications.entity';
-import { DemandForecastModule } from './demand-forecast/demand-forecast.module';
+import { User } from './users/users.entity';
+import { APP_GUARD } from '@nestjs/core';
+import { JwtAuthGuard } from './auth/jwt/jwt.guard';
+import { Reflector } from '@nestjs/core';
 
 @Module({
   imports: [
@@ -21,15 +21,24 @@ import { DemandForecastModule } from './demand-forecast/demand-forecast.module';
       useFactory: (configService: ConfigService) => ({
         type: 'postgres',
         url: configService.get('DATABASE_URL'),
-        entities: [User, Inventory, Notification],
+        ssl: {
+          rejectUnauthorized: false,
+        },
+        entities: [User, Inventory],
         synchronize: true,
+        logging: true,
       }),
     }),
     UsersModule,
     AuthModule,
     InventoryModule,
-    NotificationsModule,
-    DemandForecastModule,
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+    Reflector,
   ],
 })
 export class AppModule {}

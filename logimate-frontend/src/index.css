@@ -1,3 +1,28 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  min-height: 100vh;
+  background-color: rgb(243 244 246);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Add specific styles for pages that need flex layout */
+.flex-layout {
+  display: flex;
+  flex-direction: column;
+}
+
+* {
+  box-sizing: border-box;
+}

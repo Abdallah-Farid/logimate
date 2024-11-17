@@ -31,12 +31,13 @@ async function bootstrap() {
     errorHttpStatusCode: 422,
   }));
 
-  await app.listen(3001);
+  const port = process.env.PORT || 3001;
+  await app.listen(port);
   
   // Add startup message
   console.log('\x1b[32m%s\x1b[0m', `
 🚀 Logimate Backend Server is running!
-📡 Server: http://localhost:3001
+📡 Server: http://localhost:${port}
 ⭐ Environment: ${process.env.NODE_ENV || 'development'}
 ⏰ Started at: ${new Date().toLocaleString()}
   `);
